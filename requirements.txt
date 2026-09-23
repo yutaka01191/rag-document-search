@@ -1,0 +1,14 @@
+langchain
+langchain-community
+langchain-openai
+langchain-anthropic
+langchain-chroma
+langchain-text-splitters
+chromadb
+streamlit
+python-dotenv
+
+# 文書の読み込み
+pdfplumber      # PDF(ページ単位でテキスト抽出)
+python-docx     # Word(段落と表)
+openpyxl        # Excel(シート単位、数式は計算済みの値を読む)
