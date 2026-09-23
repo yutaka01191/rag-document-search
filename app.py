@@ -155,11 +155,13 @@ if run:
 
                 for i, (title, items) in enumerate(grouped.items(), start=1):
                     ftype = items[0].get("filetype", "")
+                    # 「[pdf](2箇所)」の形にすると Markdown のリンク記法として
+                    # 解釈されてしまうため、角括弧と丸括弧を隣接させない。
                     label = f"{i}. {title}"
                     if ftype:
-                        label += f"  [{ftype}]"
+                        label += f"　{ftype}"
                     if len(items) > 1:
-                        label += f"({len(items)}箇所)"
+                        label += f"　{len(items)}箇所"
                     with st.expander(label):
                         for s in items:
                             # locator は PDF のページ番号、Excel のシート名。
