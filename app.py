@@ -8,6 +8,8 @@ Slackのイベントハンドラから core.answer() を呼ぶだけでよい。
     streamlit run app.py
 """
 
+import hmac
+import os
 import time
 
 import streamlit as st
@@ -16,6 +18,29 @@ import core
 
 st.set_page_config(page_title="社内文書検索デモ", page_icon="📄", layout="centered")
 
+
+# --- 合言葉(パスワード) ------------------------------------------------------
+# Web に公開すると URL を知っている人は誰でも使え、そのたびに API 料金がかかる。
+# APP_PASSWORD を設定したときだけ、最初に合言葉を聞く。手元で未設定なら素通り。
+def require_password() -> None:
+    core.load_env()
+    expected = os.getenv("APP_PASSWORD")
+    if not expected or st.session_state.get("authed"):
+        return
+
+    st.title("社内文書検索デモ")
+    entered = st.text_input("パスワード", type="password")
+    if entered:
+        # == ではなく compare_digest。一致するまでの時間差から推測されるのを防ぐ定番の書き方。
+        if hmac.compare_digest(entered, expected):
+            st.session_state.authed = True
+            st.rerun()
+        st.error("パスワードが違います。")
+    st.stop()
+
+
+require_password()
+
 SAMPLE_QUESTIONS = [
     "有給休暇は何日前までに申請しますか",
     "NCフライス盤2号機の異音は解決しましたか",
@@ -23,15 +48,16 @@ SAMPLE_QUESTIONS = [
 ]
 
 
-@st.cache_resource(show_spinner="インデックスを読み込んでいます…")
+@st.cache_resource(show_spinner="準備しています…(クラウドでの初回だけ、文書の索引作成に1分ほどかかります)")
 def boot():
     """Chroma と LLM クライアントを1回だけ用意する。
 
     @st.cache_resource が無いと、画面を操作するたびに Chroma を開き直し、
     LLMクライアントを作り直すことになる。
     検索方式やkは毎回変えられるよう、ここではキャッシュしない。
+    auto_build=True により、索引が無い環境(クラウド)では初回にここで作る。
     """
-    core.warmup()
+    core.warmup(auto_build=True)
     return core.index_size()
 
 

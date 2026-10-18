@@ -12,3 +12,7 @@ python-dotenv
 pdfplumber      # PDF(ページ単位でテキスト抽出)
 python-docx     # Word(段落と表)
 openpyxl        # Excel(シート単位、数式は計算済みの値を読む)
+
+# Linux サーバー(Streamlit Community Cloud など)用。古い sqlite3 を差し替える。
+# Windows には入らないので、行末の条件で Linux のときだけ入れる。
+pysqlite3-binary; sys_platform == "linux"

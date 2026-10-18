@@ -4,6 +4,9 @@
 .env.*
 !.env.example
 
+# Streamlit の Secrets(手元で試すとき用。APIキーが入る)
+.streamlit/secrets.toml
+
 # === 自動生成されるもの =====================================================
 # ingest.py を実行すれば作り直せる。サイズも大きいのでリポジトリに入れない。
 chroma_db/

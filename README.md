@@ -147,3 +147,22 @@ Windows では既定が cp932 になり `UnicodeDecodeError` になる。
 - スキャンPDFの OCR 対応(文字が埋め込まれていないPDFは ingest.py が警告を出す)
 - .doc / .xls など旧形式への対応
 - Slack ボット化(app.py を Slack のイベントハンドラに差し替える)
+
+## Webに公開する(Streamlit Community Cloud)
+
+1. [share.streamlit.io](https://share.streamlit.io) に GitHub アカウントでログインし、「Create app」
+2. Repository に `yutaka01191/rag-document-search`、Branch に `main`、Main file path に `app.py` を指定
+3. 「Advanced settings」で Python のバージョンを **3.12** にし、Secrets に次を貼り付ける
+
+   ```toml
+   OPENAI_API_KEY = "sk-..."
+   ANTHROPIC_API_KEY = "sk-ant-..."
+   APP_PASSWORD = "デモ用の合言葉"
+   ```
+
+4. 「Deploy」。初回アクセス時だけ docs/ から索引を自動作成する(1分ほど)
+
+- `chroma_db/` はリポジトリに含めず、起動時に作り直す。アプリが休止・再起動すると次のアクセスで再作成される(サンプル文書なら Embedding 料金は1円未満)
+- `APP_PASSWORD` を設定すると、最初に合言葉を求める。URLを知っている第三者に API を使われないための最低限の対策
+- OpenAI / Anthropic の管理画面で月の利用上限を必ず設定しておく
+- 公開するのはサンプル文書だけ。実在の社内文書は入れない

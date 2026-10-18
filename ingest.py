@@ -13,6 +13,8 @@ Chroma を開くだけにする。
     python ingest.py
 
 docs/ の中身を変えたときだけ再実行すればよい。
+Streamlit Community Cloud など chroma_db を持たない環境では、
+app.py の起動時に build_index() が自動で呼ばれる(初回だけ)。
 """
 
 import os
@@ -21,6 +23,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+import sqlite_fix  # noqa: F401  chromadb より先に読み込む
 import chromadb
 import docx as python_docx
 import openpyxl
@@ -230,16 +233,22 @@ def collect_paths() -> list[Path]:
     return sorted(chosen)
 
 
+class IngestError(RuntimeError):
+    """索引を作れない(docs が無い、読める文書が無いなど)。"""
+
+
 def load_documents() -> list[Document]:
+    # sys.exit ではなく例外にしておく。app.py から呼んだときに
+    # Streamlit ごと落ちず、画面にエラーとして出せるようにするため。
     if not DOCS_DIR.exists():
-        print(f"[ERROR] docs フォルダが見つかりません: {DOCS_DIR}", file=sys.stderr)
-        sys.exit(1)
+        raise IngestError(f"docs フォルダが見つかりません: {DOCS_DIR}")
 
     paths = collect_paths()
     if not paths:
-        print(f"[ERROR] docs に読み込める文書がありません: {DOCS_DIR}", file=sys.stderr)
-        print(f"        対応形式: {', '.join(sorted(READERS))}", file=sys.stderr)
-        sys.exit(1)
+        raise IngestError(
+            f"docs に読み込める文書がありません: {DOCS_DIR}\n"
+            f"対応形式: {', '.join(sorted(READERS))}"
+        )
 
     documents: list[Document] = []
     for path in paths:
@@ -308,9 +317,11 @@ def reset_collection() -> None:
         pass  # 初回実行時はコレクションが無いので何もしない
 
 
-def main() -> None:
-    load_env_or_exit()
+def build_index() -> int:
+    """docs/ から索引を作り直す。作ったチャンク数を返す。
 
+    APIキーは呼び出し側で環境変数に用意しておくこと。
+    """
     print(f"[1] 文書を読み込みます: {DOCS_DIR}")
     documents = load_documents()
     print(f"    → {len(documents)} 件")
@@ -336,7 +347,16 @@ def main() -> None:
         persist_directory=str(PERSIST_DIR),
     )
     print(f"    → 保存先: {PERSIST_DIR}")
+    return len(chunks)
 
+
+def main() -> None:
+    load_env_or_exit()
+    try:
+        build_index()
+    except IngestError as e:
+        print(f"[ERROR] {e}", file=sys.stderr)
+        sys.exit(1)
     print("\n完了しました。次は  streamlit run app.py  で画面を起動してください。")
 
 

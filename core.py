@@ -14,6 +14,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+import sqlite_fix  # noqa: F401  chromadb より先に読み込む
+import chromadb
 from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -64,15 +66,43 @@ _vectorstore = None
 _chain = None
 
 
-def _load_env_or_raise() -> None:
+def load_env() -> None:
+    """手元では .env から、クラウドでは環境変数(Secrets)からキーを読む。
+
+    Streamlit Community Cloud の Secrets に最上位で書いた値は
+    環境変数としても見えるので、os.getenv だけで両方に対応できる。
+    """
     load_dotenv(BASE_DIR / ".env")
+
+
+def _load_env_or_raise() -> None:
+    load_env()
     missing = [k for k in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY") if not os.getenv(k)]
     if missing:
-        raise RuntimeError(f".env に次のキーが設定されていません: {', '.join(missing)}")
+        raise RuntimeError(
+            f"APIキーが設定されていません: {', '.join(missing)}\n"
+            "手元では .env、Streamlit Community Cloud では Secrets に設定してください。"
+        )
 
 
-def warmup() -> None:
-    """VectorStore と Chain を組み立てる。最初の質問の前に一度呼ぶ。"""
+def _index_count() -> int:
+    """索引のチャンク数。索引が無ければ 0。"""
+    if not PERSIST_DIR.exists():
+        return 0
+    client = chromadb.PersistentClient(path=str(PERSIST_DIR))
+    try:
+        return client.get_collection(COLLECTION_NAME).count()
+    except Exception:
+        return 0
+
+
+def warmup(auto_build: bool = False) -> None:
+    """VectorStore と Chain を組み立てる。最初の質問の前に一度呼ぶ。
+
+    auto_build=True のときは、索引が無ければ docs/ から作る。
+    chroma_db を Git に入れていないため、クラウドに置いた直後は索引が無い。
+    そこで初回起動時だけ ingest と同じ処理を走らせる(サンプル文書なら1分弱)。
+    """
     global _vectorstore, _chain
 
     if _vectorstore is not None and _chain is not None:
@@ -80,11 +110,14 @@ def warmup() -> None:
 
     _load_env_or_raise()
 
-    if not PERSIST_DIR.exists():
-        raise IndexNotFoundError(
-            f"インデックスが見つかりません: {PERSIST_DIR}\n"
-            "先に  python ingest.py  を実行してください。"
-        )
+    if _index_count() == 0:
+        if not auto_build:
+            raise IndexNotFoundError(
+                f"インデックスが見つかりません: {PERSIST_DIR}\n"
+                "先に  python ingest.py  を実行してください。"
+            )
+        import ingest  # 必要なときだけ読み込む
+        ingest.build_index()
 
     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
     _vectorstore = Chroma(
